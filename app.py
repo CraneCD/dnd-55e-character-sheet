@@ -1,5 +1,7 @@
 ﻿import streamlit as st
 import requests
+import os
+import json
 from typing import Dict, List, Optional, Tuple
 
 
@@ -102,6 +104,32 @@ def list_subclass_features(subclass_index: str) -> List[Dict]:
         return data.get("results", [])
     except Exception:
         return []
+
+
+# -----------------------------
+# Local store for named characters
+# -----------------------------
+def _store_path() -> str:
+    return os.path.join(os.getcwd(), "characters_store.json")
+
+
+def load_character_store() -> Dict[str, Dict]:
+    try:
+        with open(_store_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def save_character_store(store: Dict[str, Dict]) -> None:
+    try:
+        with open(_store_path(), "w", encoding="utf-8") as f:
+            json.dump(store, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 
 # -----------------------------
@@ -566,8 +594,7 @@ def main():
                 st.session_state.spell_state["prepared"][lvl] = [idx_map[c] for c in chosen]
 
     st.markdown("---")
-    import json
-    c1, c2 = st.columns([1, 1])
+    c1, c2, c3 = st.columns([1, 1, 1])
     with c1:
         payload = json.dumps({
             "name": name,
@@ -614,6 +641,41 @@ def main():
                 st.rerun()
             except Exception as e:
                 st.error(f"Failed to load character: {e}")
+    with c3:
+        st.markdown("**Save/Load by Name**")
+        if st.button("Save by Name", use_container_width=True):
+            store = load_character_store()
+            try:
+                store[name] = json.loads(payload)
+                save_character_store(store)
+                st.success(f"Saved '{name}'")
+            except Exception as e:
+                st.error(f"Failed to save: {e}")
+        store = load_character_store()
+        names = sorted(store.keys())
+        sel_idx = names.index(name) if name in names else 0 if names else 0
+        chosen_name = st.selectbox("Load by Name", options=names or [""], index=sel_idx if names else 0)
+        if st.button("Load Selected", use_container_width=True, disabled=not names):
+            try:
+                data = store.get(chosen_name, {})
+                st.session_state["name"] = data.get("name", st.session_state.get("name", "Adventurer"))
+                st.session_state["alignment"] = data.get("alignment", st.session_state.get("alignment", "True Neutral"))
+                st.session_state["level"] = int(data.get("level", st.session_state.get("level", 1)))
+                st.session_state["race"] = data.get("race", st.session_state.get("race", ""))
+                st.session_state["class"] = data.get("class", st.session_state.get("class", ""))
+                st.session_state["subclass"] = data.get("subclass", st.session_state.get("subclass", ""))
+                st.session_state["scores"] = data.get("scores", st.session_state.get("scores", {}))
+                st.session_state["save_profs"] = data.get("save_profs", st.session_state.get("save_profs", []))
+                st.session_state["prof_skills"] = data.get("skills_proficiencies", st.session_state.get("prof_skills", []))
+                st.session_state["expertise_skills"] = data.get("skills_expertise", st.session_state.get("expertise_skills", []))
+                if isinstance(data.get("combat"), dict):
+                    st.session_state["combat"] = data.get("combat")
+                if isinstance(data.get("spells"), dict):
+                    st.session_state["spell_state"] = data.get("spells")
+                st.success(f"Loaded '{chosen_name}'")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to load: {e}")
 
 
 if __name__ == "__main__":
