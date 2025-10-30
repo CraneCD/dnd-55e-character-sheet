@@ -824,8 +824,8 @@ def main():
         subclass_index: Optional[str] = None
         if class_index:
             subclasses = list_subclasses_for_class(class_index)
-                subclass_labels = [s["name"] for s in subclasses]
-                subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
+            subclass_labels = [s["name"] for s in subclasses]
+            subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
             # Add custom option for Clockwork Sorcerer
             if class_name.lower() == "sorcerer" and "Clockwork Sorcerer" not in subclass_labels:
                 subclass_labels.append("Clockwork Sorcerer")
