@@ -66,6 +66,44 @@ def get_spell_detail(spell_index: str) -> Dict:
     return api_get(f"spells/{spell_index}")
 
 
+@st.cache_data(show_spinner=False)
+def get_race_detail(race_index: str) -> Dict:
+    return api_get(f"races/{race_index}")
+
+
+@st.cache_data(show_spinner=False)
+def get_class_detail(class_index: str) -> Dict:
+    return api_get(f"classes/{class_index}")
+
+
+@st.cache_data(show_spinner=False)
+def get_subclass_detail(subclass_index: str) -> Dict:
+    return api_get(f"subclasses/{subclass_index}")
+
+
+@st.cache_data(show_spinner=False)
+def get_trait_detail(trait_index: str) -> Dict:
+    return api_get(f"traits/{trait_index}")
+
+
+@st.cache_data(show_spinner=False)
+def list_class_features(class_index: str) -> List[Dict]:
+    try:
+        data = api_get(f"classes/{class_index}/features")
+        return data.get("results", [])
+    except Exception:
+        return []
+
+
+@st.cache_data(show_spinner=False)
+def list_subclass_features(subclass_index: str) -> List[Dict]:
+    try:
+        data = api_get(f"subclasses/{subclass_index}/features")
+        return data.get("results", [])
+    except Exception:
+        return []
+
+
 # -----------------------------
 # Rules helpers
 # -----------------------------
@@ -157,6 +195,59 @@ def group_spells_by_level(class_index: Optional[str], subclass_index: Optional[s
     for lvl in by_level:
         by_level[lvl] = sorted(by_level[lvl], key=lambda x: x["name"])
     return by_level
+
+
+def extract_skill_name(prof_name: str) -> Optional[str]:
+    # API represents as "Skill: Perception"
+    if not isinstance(prof_name, str):
+        return None
+    if prof_name.lower().startswith("skill:"):
+        return prof_name.split(":", 1)[1].strip()
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Optional[str], subclass_index: Optional[str]) -> List[str]:
+    granted: List[str] = []
+    # Race fixed proficiencies
+    try:
+        if race_index:
+            r = get_race_detail(race_index)
+            for p in r.get("starting_proficiencies", []):
+                s = extract_skill_name(p.get("name"))
+                if s:
+                    granted.append(s)
+            # Some races list traits that grant proficiencies
+            for t in r.get("traits", []):
+                try:
+                    td = get_trait_detail(t.get("index"))
+                    for p in td.get("proficiencies", []) or []:
+                        s = extract_skill_name(p.get("name"))
+                        if s:
+                            granted.append(s)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # Subclass may grant proficiencies via features
+    try:
+        if subclass_index and not subclass_index.endswith("-custom"):
+            feats = list_subclass_features(subclass_index)
+            for f in feats:
+                try:
+                    fd = api_get(f"features/{f.get('index')}")
+                    for p in fd.get("proficiencies", []) or []:
+                        s = extract_skill_name(p.get("name"))
+                        if s:
+                            granted.append(s)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # Classes usually offer choices rather than fixed skill proficiencies, so we do not auto-grant from choices
+    # De-duplicate
+    out = sorted({g for g in granted if g in SKILLS.keys()})
+    return out
 
 
 # -----------------------------
@@ -274,6 +365,7 @@ def main():
         race_labels = [r["name"] for r in races]
         class_labels = [c["name"] for c in classes]
         class_index_by_name = {c["name"]: c["index"] for c in classes}
+        race_index_by_name = {r["name"]: r["index"] for r in races}
 
         if races:
             race_default = st.session_state.get("race")
@@ -282,6 +374,7 @@ def main():
         else:
             race_name = st.text_input("Race", value=st.session_state.get("race", ""))
         st.session_state["race"] = race_name
+        race_index = race_index_by_name.get(race_name)
 
         if classes:
             class_default = st.session_state.get("class")
@@ -308,6 +401,8 @@ def main():
                 subclass_name = st.selectbox("Subclass", options=subclass_labels, index=sc_idx)
                 subclass_index = subclass_index_by_name.get(subclass_name)
                 st.session_state["subclass"] = subclass_name
+        else:
+            race_index = None
 
     st.markdown("---")
 
@@ -326,7 +421,13 @@ def main():
         st.session_state["save_profs"] = save_profs
 
         st.subheader("Skills")
-        prof_skills, expertise_skills = skills_proficiency_inputs()
+        auto_granted = auto_granted_skill_proficiencies(race_index, class_index, subclass_index)
+        if auto_granted:
+            st.caption("Auto-granted by ancestry/class/subclass: " + ", ".join(auto_granted))
+        # Merge auto-granted with saved/current selection
+        current_prof = sorted(set((st.session_state.get("prof_skills") or [])) | set(auto_granted))
+        st.session_state["prof_skills"] = current_prof
+        prof_skills, expertise_skills = skills_proficiency_inputs(default_proficiencies=current_prof)
 
         skill_values = compute_skill_values(scores, prof_bonus, prof_skills, expertise_skills)
         save_values = compute_saves(scores, prof_bonus, save_profs)
@@ -383,6 +484,53 @@ def main():
             st.session_state.combat["bonus_actions"] = st.text_area("Bonus Actions", value=st.session_state.combat["bonus_actions"], height=120)
         with a2:
             st.session_state.combat["equipment"] = st.text_area("Equipment", value=st.session_state.combat["equipment"], height=252)
+
+        st.markdown("#### Traits & Features")
+        # Race traits
+        try:
+            if 'race_index' in locals() and race_index:
+                rd = get_race_detail(race_index)
+                if rd.get("traits"):
+                    with st.expander(f"Race Traits — {race_name}"):
+                        for t in rd["traits"]:
+                            try:
+                                td = get_trait_detail(t.get("index"))
+                                st.markdown(f"**{td.get('name','')}**")
+                                desc = td.get("desc") or []
+                                if isinstance(desc, list):
+                                    for p in desc[:3]:
+                                        st.write(p)
+                                elif isinstance(desc, str):
+                                    st.write(desc)
+                            except Exception:
+                                st.write(t.get("name"))
+        except Exception:
+            pass
+
+        # Class features (summary list)
+        try:
+            if class_index:
+                feats = list_class_features(class_index)
+                if feats:
+                    with st.expander(f"Class Features — {class_name}"):
+                        for f in feats[:30]:
+                            st.write(f.get("name"))
+        except Exception:
+            pass
+
+        # Subclass features (summary list)
+        try:
+            if subclass_index and not str(subclass_index).endswith("-custom"):
+                sfeats = list_subclass_features(subclass_index)
+                if sfeats:
+                    with st.expander(f"Subclass Features — {subclass_name}"):
+                        for f in sfeats[:30]:
+                            st.write(f.get("name"))
+            elif subclass_name == "Clockwork Sorcerer":
+                with st.expander("Subclass Features — Clockwork Sorcerer"):
+                    st.write("Restoring Balance, Bastion of Law, Trance of Order, Clockwork Cavalcade (placeholder)")
+        except Exception:
+            pass
 
     with tab_spells:
         st.subheader("Spells")
