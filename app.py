@@ -132,6 +132,33 @@ def format_mod(mod: int) -> str:
     return f"+{mod}" if mod >= 0 else str(mod)
 
 
+@st.cache_data(show_spinner=False)
+def group_spells_by_level(class_index: Optional[str], subclass_index: Optional[str]) -> Dict[int, List[Dict]]:
+    if not class_index:
+        return {}
+    class_spells = list_spells_for_class(class_index)
+    subclass_spells = list_spells_for_subclass(subclass_index) if subclass_index else []
+    merged: Dict[str, Dict] = {}
+    for s in class_spells + subclass_spells:
+        if s and isinstance(s, dict) and s.get("index"):
+            merged[s["index"]] = s
+    by_level: Dict[int, List[Dict]] = {i: [] for i in range(0, 10)}
+    for idx, s in merged.items():
+        try:
+            detail = get_spell_detail(idx)
+            lvl = int(detail.get("level", 0))
+            by_level.setdefault(lvl, []).append({
+                "index": idx,
+                "name": detail.get("name", s.get("name")),
+                "level": lvl,
+            })
+        except Exception:
+            continue
+    for lvl in by_level:
+        by_level[lvl] = sorted(by_level[lvl], key=lambda x: x["name"])
+    return by_level
+
+
 # -----------------------------
 # UI helpers
 # -----------------------------
@@ -241,44 +268,36 @@ def main():
         subclass_index: Optional[str] = None
         if class_index:
             subclasses = list_subclasses_for_class(class_index)
-            if subclasses:
-                subclass_labels = [s["name"] for s in subclasses]
-                subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
+            subclass_labels = [s["name"] for s in subclasses]
+            subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
+            # Add custom option for Clockwork Sorcerer
+            if class_name.lower() == "sorcerer" and "Clockwork Sorcerer" not in subclass_labels:
+                subclass_labels.append("Clockwork Sorcerer")
+                subclass_index_by_name["Clockwork Sorcerer"] = "clockwork-sorcerer-custom"
+            if subclass_labels:
                 subclass_name = st.selectbox("Subclass", options=subclass_labels)
                 subclass_index = subclass_index_by_name.get(subclass_name)
 
     st.markdown("---")
 
-    st.subheader("Ability Scores")
-    scores = ability_inputs()
+    tab_abilities, tab_combat, tab_spells = st.tabs(["Abilities & Skills", "Combat", "Spells"])
 
-    prof_bonus = proficiency_bonus_for_level(int(level))
-    st.info(f"Proficiency Bonus: {format_mod(prof_bonus)}")
+    with tab_abilities:
+        st.subheader("Ability Scores")
+        scores = ability_inputs()
 
-    # Default save profs by class
-    default_save_profs = list(CLASS_SAVING_PROFICIENCIES.get(class_index or "", ("","")))
-    save_profs = st.multiselect("Saving Throw Proficiencies", options=ABILITY_NAMES, default=[s for s in default_save_profs if s])
+        prof_bonus = proficiency_bonus_for_level(int(level))
+        st.info(f"Proficiency Bonus: {format_mod(prof_bonus)}")
 
-    st.subheader("Skills")
-    prof_skills, expertise_skills = skills_proficiency_inputs()
+        default_save_profs = list(CLASS_SAVING_PROFICIENCIES.get(class_index or "", ("","")))
+        save_profs = st.multiselect("Saving Throw Proficiencies", options=ABILITY_NAMES, default=[s for s in default_save_profs if s])
 
-    skill_values = compute_skill_values(scores, prof_bonus, prof_skills, expertise_skills)
-    save_values = compute_saves(scores, prof_bonus, save_profs)
-    initiative = ability_modifier(scores["Dexterity"])  # + misc can be added later
+        st.subheader("Skills")
+        prof_skills, expertise_skills = skills_proficiency_inputs()
 
-    col_stats, col_spells = st.columns([1.1, 1])
-    with col_stats:
-        st.markdown("### Derived Stats")
-        cols = st.columns(3)
-        with cols[0]:
-            st.metric("AC (base)", 10 + [ability_modifier(scores["Dexterity"]), 0][0])
-            st.metric("Initiative", format_mod(initiative))
-        with cols[1]:
-            st.metric("Passive Perception", 10 + ability_modifier(scores["Wisdom"]) + (prof_bonus if "Perception" in prof_skills else 0))
-            st.metric("Speed", 30)
-        with cols[2]:
-            st.metric("HP (level 1)", max(1, ability_modifier(scores["Constitution"]) + 8))
-            st.metric("Prof. Bonus", format_mod(prof_bonus))
+        skill_values = compute_skill_values(scores, prof_bonus, prof_skills, expertise_skills)
+        save_values = compute_saves(scores, prof_bonus, save_profs)
+        initiative = ability_modifier(scores["Dexterity"])  # + misc can be added later
 
         st.markdown("#### Saving Throws")
         save_cols = st.columns(3)
@@ -292,9 +311,78 @@ def main():
             with grid[i % 3]:
                 st.write(f"{skill}: {format_mod(total)}")
 
-    with col_spells:
-        st.markdown("### Spells")
-        chosen_spells = render_spells_picker(class_index, subclass_index)
+    with tab_combat:
+        st.subheader("Combat")
+        if "combat" not in st.session_state:
+            st.session_state.combat = {
+                "ac": 10,
+                "hp_max": 10,
+                "hp_current": 10,
+                "hp_temp": 0,
+                "death_success": 0,
+                "death_failure": 0,
+                "actions": "",
+                "bonus_actions": "",
+                "equipment": "",
+            }
+        ac_base = 10 + max(0, ability_modifier(scores["Dexterity"])) if 'scores' in locals() else 10
+        st.session_state.combat["ac"] = st.number_input("Armor Class (AC)", min_value=0, max_value=30, value=int(st.session_state.combat.get("ac", ac_base)))
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.session_state.combat["hp_max"] = st.number_input("HP Max", min_value=1, max_value=999, value=int(st.session_state.combat["hp_max"]))
+        with c2:
+            st.session_state.combat["hp_current"] = st.number_input("HP Current", min_value=0, max_value=999, value=int(st.session_state.combat["hp_current"]))
+        with c3:
+            st.session_state.combat["hp_temp"] = st.number_input("Temp HP", min_value=0, max_value=999, value=int(st.session_state.combat["hp_temp"]))
+
+        st.markdown("#### Death Saves")
+        d1, d2 = st.columns(2)
+        with d1:
+            st.session_state.combat["death_success"] = st.number_input("Successes", min_value=0, max_value=3, value=int(st.session_state.combat["death_success"]))
+        with d2:
+            st.session_state.combat["death_failure"] = st.number_input("Failures", min_value=0, max_value=3, value=int(st.session_state.combat["death_failure"]))
+
+        st.markdown("#### Actions & Equipment")
+        a1, a2 = st.columns(2)
+        with a1:
+            st.session_state.combat["actions"] = st.text_area("Actions", value=st.session_state.combat["actions"], height=120)
+            st.session_state.combat["bonus_actions"] = st.text_area("Bonus Actions", value=st.session_state.combat["bonus_actions"], height=120)
+        with a2:
+            st.session_state.combat["equipment"] = st.text_area("Equipment", value=st.session_state.combat["equipment"], height=252)
+
+    with tab_spells:
+        st.subheader("Spells")
+        grouped = group_spells_by_level(class_index, subclass_index)
+        if "spell_state" not in st.session_state:
+            st.session_state.spell_state = {
+                "slots": {lvl: 0 for lvl in range(1, 10)},
+                "slots_used": {lvl: 0 for lvl in range(1, 10)},
+                "prepared": {lvl: [] for lvl in range(0, 10)},
+            }
+        # Level 0 (cantrips)
+        cantrips = grouped.get(0, [])
+        cantrip_labels = [f"{s['name']} ({s['index']})" for s in cantrips]
+        cantrip_map = {f"{s['name']} ({s['index']})": s['index'] for s in cantrips}
+        selected_cantrips = st.multiselect("Cantrips", options=cantrip_labels, default=[
+            next((k for k in cantrip_labels if k.endswith(f"({i})")), None) for i in st.session_state.spell_state["prepared"][0]
+        ])
+        st.session_state.spell_state["prepared"][0] = [cantrip_map[lbl] for lbl in selected_cantrips if lbl]
+
+        st.markdown("---")
+        for lvl in range(1, 10):
+            spells_lvl = grouped.get(lvl, [])
+            with st.expander(f"Level {lvl} — {len(spells_lvl)} spells"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.session_state.spell_state["slots"][lvl] = st.number_input(f"Level {lvl} Spell Slots", min_value=0, max_value=9, value=int(st.session_state.spell_state["slots"][lvl]), key=f"slots_{lvl}")
+                with c2:
+                    st.session_state.spell_state["slots_used"][lvl] = st.number_input(f"Slots Expended (L{lvl})", min_value=0, max_value=9, value=int(st.session_state.spell_state["slots_used"][lvl]), key=f"slots_used_{lvl}")
+                labels = [f"{s['name']} ({s['index']})" for s in spells_lvl]
+                idx_map = {f"{s['name']} ({s['index']})": s['index'] for s in spells_lvl}
+                current_defaults = [next((k for k in labels if k.endswith(f"({i})")), None) for i in st.session_state.spell_state["prepared"][lvl]]
+                chosen = st.multiselect(f"Prepared Spells (Level {lvl})", options=labels, default=[d for d in current_defaults if d is not None], key=f"prepared_{lvl}")
+                st.session_state.spell_state["prepared"][lvl] = [idx_map[c] for c in chosen]
 
     st.markdown("---")
     st.subheader("Summary")
@@ -325,7 +413,8 @@ def main():
             "initiative": initiative,
             "saves": save_values,
             "skills": skill_values,
-            "spells": chosen_spells,
+            "combat": st.session_state.get("combat", {}),
+            "spells": st.session_state.get("spell_state", {}),
         }, ensure_ascii=False, indent=2)
         st.download_button(
             label="Download Character JSON",
