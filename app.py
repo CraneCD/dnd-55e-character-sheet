@@ -499,7 +499,7 @@ def format_mod(mod: int) -> str:
 
 
 @st.cache_data(show_spinner=False)
-def group_spells_by_level(class_index: Optional[str], subclass_index: Optional[str]) -> Dict[int, List[Dict]]:
+def group_spells_by_level(class_index: Optional[str], subclass_index: Optional[str], expanded_key: str) -> Dict[int, List[Dict]]:
     if not class_index:
         return {}
     class_spells = list_spells_for_class(class_index)
@@ -1000,7 +1000,8 @@ def main():
 
     with tab_spells:
         st.subheader("Spells")
-        grouped = group_spells_by_level(class_index, subclass_index)
+        expanded_key = json.dumps(load_expanded_from_session(), sort_keys=True)
+        grouped = group_spells_by_level(class_index, subclass_index, expanded_key)
         st.session_state.spell_state = normalize_spell_state(st.session_state.get("spell_state"))
         # Level 0 (cantrips)
         cantrips = grouped.get(0, [])
