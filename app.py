@@ -396,8 +396,8 @@ def render_spells_picker(class_index: Optional[str], subclass_index: Optional[st
 
 
 def main():
-    st.set_page_config(page_title="D&D 5.5e Character Sheet", page_icon="ðŸ§™", layout="wide")
-    st.title("ðŸ§™ D&D 5.5e Character Sheet Maker")
+    st.set_page_config(page_title="D&D 5.5e Character Sheet", layout="wide")
+    st.title("D&D 5.5e Character Sheet Maker")
     st.caption("Build characters with races, classes, subclasses, spells, and auto-calculated stats.")
 
     with st.sidebar:
