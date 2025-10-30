@@ -107,6 +107,20 @@ def list_subclass_features(subclass_index: str) -> List[Dict]:
 
 
 @st.cache_data(show_spinner=False)
+def list_backgrounds() -> List[Dict]:
+    try:
+        data = api_get("backgrounds")
+        return data.get("results", [])
+    except Exception:
+        return []
+
+
+@st.cache_data(show_spinner=False)
+def get_background_detail(background_index: str) -> Dict:
+    return api_get(f"backgrounds/{background_index}")
+
+
+@st.cache_data(show_spinner=False)
 def get_feature_detail(feature_index: str) -> Dict:
     return api_get(f"features/{feature_index}")
 
@@ -554,7 +568,7 @@ def extract_skill_name(prof_name: str) -> Optional[str]:
 
 
 @st.cache_data(show_spinner=False)
-def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Optional[str], subclass_index: Optional[str]) -> List[str]:
+def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Optional[str], subclass_index: Optional[str], background_index: Optional[str]) -> List[str]:
     granted: List[str] = []
     # Race fixed proficiencies
     try:
@@ -574,6 +588,16 @@ def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Opt
                             granted.append(s)
                 except Exception:
                     pass
+    except Exception:
+        pass
+    # Background skill proficiencies
+    try:
+        if background_index:
+            bd = get_background_detail(background_index)
+            for p in bd.get("starting_proficiencies", []) or []:
+                s = extract_skill_name(p.get("name"))
+                if s:
+                    granted.append(s)
     except Exception:
         pass
     # Subclass may grant proficiencies via features
@@ -744,6 +768,7 @@ def main():
         with st.spinner("Loading options..."):
             races = list_races()
             classes = list_classes()
+            backgrounds = list_backgrounds()
 
         race_labels = [r["name"] for r in races]
         class_labels = [c["name"] for c in classes]
@@ -806,6 +831,19 @@ def main():
             except Exception as e:
                 st.error(f"Failed to parse expanded content: {e}")
 
+        # Background selection
+        st.subheader("Background")
+        bg_labels = [b["name"] for b in backgrounds]
+        bg_index_by_name = {b["name"]: b["index"] for b in backgrounds}
+        if bg_labels:
+            bg_default = st.session_state.get("background")
+            bg_idx = bg_labels.index(bg_default) if bg_default in bg_labels else 0
+            background_name = st.selectbox("Background", options=bg_labels, index=bg_idx)
+        else:
+            background_name = st.text_input("Background", value=st.session_state.get("background", ""))
+        st.session_state["background"] = background_name
+        background_index = bg_index_by_name.get(background_name)
+
     st.markdown("---")
 
     tab_abilities, tab_combat, tab_spells = st.tabs(["Abilities & Skills", "Combat", "Spells"])
@@ -823,7 +861,7 @@ def main():
         st.session_state["save_profs"] = save_profs
 
         st.subheader("Skills")
-        auto_granted = auto_granted_skill_proficiencies(race_index, class_index, subclass_index)
+        auto_granted = auto_granted_skill_proficiencies(race_index, class_index, subclass_index, background_index)
         if auto_granted:
             st.caption("Auto-granted by ancestry/class/subclass: " + ", ".join(auto_granted))
         # Merge auto-granted with saved/current selection
@@ -1023,6 +1061,30 @@ def main():
         except Exception:
             pass
 
+        # Background feature and bonuses
+        try:
+            if 'background_index' in locals() and background_index:
+                bd = get_background_detail(background_index)
+                with st.expander(f"Background — {background_name}"):
+                    feat = bd.get("feature") or {}
+                    if feat:
+                        st.write(f"Feature: {feat.get('name','')}")
+                        desc = feat.get("desc") or []
+                        if isinstance(desc, list):
+                            for p in desc[:3]:
+                                st.write(p)
+                        elif isinstance(desc, str):
+                            st.write(desc)
+                    # List bonuses
+                    langs = [l.get("name") for l in (bd.get("languages") or [])]
+                    tools = [t.get("name") for t in (bd.get("starting_proficiencies") or []) if (t.get("name") and not str(t.get("name")).lower().startswith("skill:"))]
+                    if langs:
+                        st.caption("Languages: " + ", ".join(langs))
+                    if tools:
+                        st.caption("Tool Proficiencies: " + ", ".join(tools))
+        except Exception:
+            pass
+
     with tab_spells:
         st.subheader("Spells")
         expanded_key = json.dumps(load_expanded_from_session(), sort_keys=True)
@@ -1072,6 +1134,7 @@ def main():
             "race": race_name,
             "class": class_name,
             "subclass": subclass_name,
+            "background": background_name,
             "scores": scores,
             "proficiency_bonus": proficiency_bonus_for_level(int(level)),
             "initiative": ability_modifier(scores["Dexterity"]),
@@ -1098,6 +1161,7 @@ def main():
                 st.session_state["race"] = data.get("race", st.session_state.get("race", ""))
                 st.session_state["class"] = data.get("class", st.session_state.get("class", ""))
                 st.session_state["subclass"] = data.get("subclass", st.session_state.get("subclass", ""))
+                st.session_state["background"] = data.get("background", st.session_state.get("background", ""))
                 st.session_state["scores"] = data.get("scores", st.session_state.get("scores", {}))
                 st.session_state["save_profs"] = data.get("save_profs", st.session_state.get("save_profs", []))
                 st.session_state["prof_skills"] = data.get("skills_proficiencies", st.session_state.get("prof_skills", []))
@@ -1133,6 +1197,7 @@ def main():
                 st.session_state["race"] = data.get("race", st.session_state.get("race", ""))
                 st.session_state["class"] = data.get("class", st.session_state.get("class", ""))
                 st.session_state["subclass"] = data.get("subclass", st.session_state.get("subclass", ""))
+                st.session_state["background"] = data.get("background", st.session_state.get("background", ""))
                 st.session_state["scores"] = data.get("scores", st.session_state.get("scores", {}))
                 st.session_state["save_profs"] = data.get("save_profs", st.session_state.get("save_profs", []))
                 st.session_state["prof_skills"] = data.get("skills_proficiencies", st.session_state.get("prof_skills", []))
