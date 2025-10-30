@@ -1010,6 +1010,19 @@ def main():
             st.session_state.combat["ac"] = computed_ac
         st.metric("Calculated AC", st.session_state.combat["ac"])
 
+        st.markdown("#### Initiative")
+        if "initiative_bonus" not in st.session_state.combat:
+            st.session_state.combat["initiative_bonus"] = 0
+        base_initiative = ability_modifier(scores.get("Dexterity", 10))
+        st.session_state.combat["initiative_bonus"] = st.number_input(
+            "Misc Initiative Bonus",
+            min_value=-20,
+            max_value=20,
+            value=int(st.session_state.combat.get("initiative_bonus", 0))
+        )
+        total_initiative = base_initiative + int(st.session_state.combat["initiative_bonus"])
+        st.metric("Initiative", format_mod(total_initiative))
+
         # Sorcery Points (only for Sorcerer)
         try:
             if st.session_state.get("class", "").lower() == "sorcerer":
