@@ -386,7 +386,24 @@ DEFAULT_EXPANDED = {
     ],
     "traits": [],
     "subclass_features": [],
-    "backgrounds": []  # {name,index,feature:{name,desc},skills:[Skill names],tools:[...],languages:[...]}
+    "backgrounds": [  # {name,index,feature:{name,desc},skills:[Skill names],tools:[...],languages:[...]}
+        {"name": "Acolyte", "index": "acolyte", "feature": {"name": "Faithful Service", "desc": "You serve a temple and gain shelter, healing, and community support from those of your faith."}, "skills": ["Insight", "Religion"], "tools": ["None"], "languages": ["Celestial"]},
+        {"name": "Artisan", "index": "artisan", "feature": {"name": "Guild Membership", "desc": "You belong to a trade guild that provides connections, lodging, and legal support in return for dues."}, "skills": ["Persuasion", "Investigation"], "tools": ["Artisan’s Tools (choose one)"], "languages": ["Dwarvish"]},
+        {"name": "Charlatan", "index": "charlatan", "feature": {"name": "Con Artist", "desc": "You maintain false identities and can forge simple documents and credentials."}, "skills": ["Deception", "Sleight of Hand"], "tools": ["Disguise Kit", "Forgery Kit"], "languages": ["None"]},
+        {"name": "Criminal", "index": "criminal", "feature": {"name": "Criminal Contacts", "desc": "You have a network of underworld associates who can provide information and favors."}, "skills": ["Stealth", "Deception"], "tools": ["Thieves’ Tools"], "languages": ["Thieves’ Cant"]},
+        {"name": "Entertainer", "index": "entertainer", "feature": {"name": "By Popular Demand", "desc": "You can secure free lodging and food by performing for crowds."}, "skills": ["Performance", "Acrobatics"], "tools": ["Musical Instrument (choose one)", "Disguise Kit"], "languages": ["None"]},
+        {"name": "Guard", "index": "guard", "feature": {"name": "Watchful Eye", "desc": "You can identify threats or notice suspicious behavior more easily when protecting a person or location."}, "skills": ["Perception", "Athletics"], "tools": ["Gaming Set (choose one)"], "languages": ["Common"]},
+        {"name": "Farmer", "index": "farmer", "feature": {"name": "Rural Roots", "desc": "You can find food, shelter, and allies among common folk in rural areas."}, "skills": ["Animal Handling", "Nature"], "tools": ["Artisan’s Tools (farmer’s tools)"], "languages": ["Halfling"]},
+        {"name": "Guide", "index": "guide", "feature": {"name": "Wilderness Expertise", "desc": "You can find safe passage, water, and shelter in the wilds for yourself and companions."}, "skills": ["Survival", "Perception"], "tools": ["Navigator’s Tools"], "languages": ["Giant"]},
+        {"name": "Hermit", "index": "hermit", "feature": {"name": "Discovery", "desc": "You uncovered a hidden truth about the world or a great secret that others seek."}, "skills": ["Medicine", "Religion"], "tools": ["Herbalism Kit"], "languages": ["Draconic"]},
+        {"name": "Noble", "index": "noble", "feature": {"name": "Position of Privilege", "desc": "You command respect from those of your station and can secure audiences with nobles."}, "skills": ["History", "Persuasion"], "tools": ["Gaming Set (choose one)"], "languages": ["Elvish"]},
+        {"name": "Merchant", "index": "merchant", "feature": {"name": "Trader’s Network", "desc": "You have trade connections and can find local markets or assess the value of goods easily."}, "skills": ["Insight", "Persuasion"], "tools": ["Navigator’s Tools", "Artisan’s Tools (choose one)"], "languages": ["Dwarvish"]},
+        {"name": "Sage", "index": "sage", "feature": {"name": "Researcher", "desc": "You can recall or find obscure lore through academic connections and libraries."}, "skills": ["Arcana", "History"], "tools": ["None"], "languages": ["Draconic"]},
+        {"name": "Sailor", "index": "sailor", "feature": {"name": "Ship’s Passage", "desc": "You can secure free passage on ships for yourself and companions by working as crew."}, "skills": ["Athletics", "Perception"], "tools": ["Navigator’s Tools", "Vehicles (Water)"], "languages": ["Aquan"]},
+        {"name": "Scribe", "index": "scribe", "feature": {"name": "Documented Knowledge", "desc": "You are trained in recording and analyzing information, giving you access to archives and scholars."}, "skills": ["Arcana", "History"], "tools": ["Calligrapher’s Supplies"], "languages": ["Elvish"]},
+        {"name": "Soldier", "index": "soldier", "feature": {"name": "Military Rank", "desc": "You retain the respect of soldiers and can call upon your rank to gain access or favors in military circles."}, "skills": ["Athletics", "Intimidation"], "tools": ["Gaming Set (choose one)", "Vehicles (Land)"], "languages": ["Common"]},
+        {"name": "Wayfarer", "index": "wayfarer", "feature": {"name": "World Traveler", "desc": "You have traveled widely, can recall distant customs, and find shelter among diverse peoples."}, "skills": ["Survival", "Insight"], "tools": ["Cartographer’s Tools"], "languages": ["Any one"]}
+    ]
 }
 
 def load_expanded_from_session() -> Dict:
