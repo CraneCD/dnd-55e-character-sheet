@@ -644,6 +644,7 @@ def main():
         with c_armor:
             st.session_state.combat["armor"]["equipped"] = st.selectbox("Equipped Armor", options=armor_names, index=armor_names.index(st.session_state.combat["armor"]["equipped"]) if st.session_state.combat["armor"].get("equipped") in armor_names else 0)
         with c_shield:
+            st.markdown("<div style='height: 12px'></div>", unsafe_allow_html=True)
             st.session_state.combat["armor"]["shield"] = st.checkbox("Shield (+2 AC)", value=bool(st.session_state.combat["armor"].get("shield", False)))
         c_misc, c_override = st.columns([1, 1])
         with c_misc:
