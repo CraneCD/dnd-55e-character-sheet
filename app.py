@@ -952,6 +952,32 @@ def main():
         with a2:
             st.session_state.combat["equipment"] = st.text_area("Equipment", value=st.session_state.combat["equipment"], height=252)
 
+        st.markdown("#### Currency")
+        if "currency" not in st.session_state.combat:
+            st.session_state.combat["currency"] = {"cp": 0, "sp": 0, "ep": 0, "gp": 0, "pp": 0}
+        c_cp, c_sp, c_ep, c_gp, c_pp = st.columns(5)
+        with c_cp:
+            st.session_state.combat["currency"]["cp"] = st.number_input("CP", min_value=0, max_value=100000, value=int(st.session_state.combat["currency"].get("cp", 0)))
+        with c_sp:
+            st.session_state.combat["currency"]["sp"] = st.number_input("SP", min_value=0, max_value=100000, value=int(st.session_state.combat["currency"].get("sp", 0)))
+        with c_ep:
+            st.session_state.combat["currency"]["ep"] = st.number_input("EP", min_value=0, max_value=100000, value=int(st.session_state.combat["currency"].get("ep", 0)))
+        with c_gp:
+            st.session_state.combat["currency"]["gp"] = st.number_input("GP", min_value=0, max_value=100000, value=int(st.session_state.combat["currency"].get("gp", 0)))
+        with c_pp:
+            st.session_state.combat["currency"]["pp"] = st.number_input("PP", min_value=0, max_value=100000, value=int(st.session_state.combat["currency"].get("pp", 0)))
+
+        # Show total in GP for convenience (5e rates: 10cp=1sp, 10sp=1gp, 2ep=1gp, 10gp=1pp)
+        cur = st.session_state.combat["currency"]
+        total_gp = (
+            float(cur.get("gp", 0))
+            + float(cur.get("pp", 0)) * 10.0
+            + float(cur.get("ep", 0)) * 0.5
+            + float(cur.get("sp", 0)) / 10.0
+            + float(cur.get("cp", 0)) / 100.0
+        )
+        st.caption(f"Total value: {total_gp:.2f} gp")
+
         st.markdown("#### Armor & Shields")
         if "armor" not in st.session_state.combat:
             st.session_state.combat["armor"] = {
