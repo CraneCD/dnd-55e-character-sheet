@@ -824,8 +824,8 @@ def main():
         subclass_index: Optional[str] = None
         if class_index:
             subclasses = list_subclasses_for_class(class_index)
-            subclass_labels = [s["name"] for s in subclasses]
-            subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
+                subclass_labels = [s["name"] for s in subclasses]
+                subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
             # Add custom option for Clockwork Sorcerer
             if class_name.lower() == "sorcerer" and "Clockwork Sorcerer" not in subclass_labels:
                 subclass_labels.append("Clockwork Sorcerer")
@@ -878,18 +878,18 @@ def main():
     tab_abilities, tab_combat, tab_spells, tab_expanded = st.tabs(["Abilities & Skills", "Combat", "Spells", "Expanded Content"])
 
     with tab_abilities:
-        st.subheader("Ability Scores")
-        scores = ability_inputs()
+    st.subheader("Ability Scores")
+    scores = ability_inputs()
 
-        prof_bonus = proficiency_bonus_for_level(int(level))
-        st.info(f"Proficiency Bonus: {format_mod(prof_bonus)}")
+    prof_bonus = proficiency_bonus_for_level(int(level))
+    st.info(f"Proficiency Bonus: {format_mod(prof_bonus)}")
 
-        default_save_profs = list(CLASS_SAVING_PROFICIENCIES.get(class_index or "", ("","")))
+    default_save_profs = list(CLASS_SAVING_PROFICIENCIES.get(class_index or "", ("","")))
         save_defaults = st.session_state.get("save_profs", [s for s in default_save_profs if s])
         save_profs = st.multiselect("Saving Throw Proficiencies", options=ABILITY_NAMES, default=save_defaults)
         st.session_state["save_profs"] = save_profs
 
-        st.subheader("Skills")
+    st.subheader("Skills")
         auto_granted = auto_granted_skill_proficiencies(race_index, class_index, subclass_index, background_index, expanded_background)
         if auto_granted:
             st.caption("Auto-granted by ancestry/class/subclass/background: " + ", ".join(auto_granted))
@@ -898,9 +898,9 @@ def main():
         st.session_state["prof_skills"] = current_prof
         prof_skills, expertise_skills = skills_proficiency_inputs(default_proficiencies=current_prof)
 
-        skill_values = compute_skill_values(scores, prof_bonus, prof_skills, expertise_skills)
-        save_values = compute_saves(scores, prof_bonus, save_profs)
-        initiative = ability_modifier(scores["Dexterity"])  # + misc can be added later
+    skill_values = compute_skill_values(scores, prof_bonus, prof_skills, expertise_skills)
+    save_values = compute_saves(scores, prof_bonus, save_profs)
+    initiative = ability_modifier(scores["Dexterity"])  # + misc can be added later
 
         st.markdown("#### Saving Throws")
         save_cols = st.columns(3)
