@@ -869,7 +869,8 @@ def main():
             background_name = st.text_input("Background", value=st.session_state.get("background", ""))
         st.session_state["background"] = background_name
         background_index = bg_index_by_name.get(background_name)
-        expanded_background = next((eb for eb in expanded_bgs if eb.get("name") == background_name), None) if background_index is None else None
+        # Always resolve expanded background by name (even if an index was assigned)
+        expanded_background = next((eb for eb in expanded_bgs if eb.get("name") == background_name), None)
 
     st.markdown("---")
 
@@ -1130,24 +1131,8 @@ def main():
         # Background feature and bonuses
         try:
             with st.expander(f"Background — {background_name}"):
-                if 'background_index' in locals() and background_index:
-                    bd = get_background_detail(background_index)
-                    feat = bd.get("feature") or {}
-                    if feat:
-                        st.write(f"Feature: {feat.get('name','')}")
-                        desc = feat.get("desc") or []
-                        if isinstance(desc, list):
-                            for p in desc[:3]:
-                                st.write(p)
-                        elif isinstance(desc, str):
-                            st.write(desc)
-                    langs = [l.get("name") for l in (bd.get("languages") or [])]
-                    tools = [t.get("name") for t in (bd.get("starting_proficiencies") or []) if (t.get("name") and not str(t.get("name")).lower().startswith("skill:"))]
-                    if langs:
-                        st.caption("Languages: " + ", ".join(langs))
-                    if tools:
-                        st.caption("Tool Proficiencies: " + ", ".join(tools))
-                elif 'expanded_background' in locals() and expanded_background:
+                # Prefer expanded background if available
+                if 'expanded_background' in locals() and expanded_background:
                     feat = expanded_background.get("feature") or {}
                     if feat:
                         st.write(f"Feature: {feat.get('name','')}")
@@ -1175,6 +1160,23 @@ def main():
                                 st.write(p)
                         elif isinstance(ofd, str):
                             st.write(ofd)
+                elif 'background_index' in locals() and background_index:
+                    bd = get_background_detail(background_index)
+                    feat = bd.get("feature") or {}
+                    if feat:
+                        st.write(f"Feature: {feat.get('name','')}")
+                        desc = feat.get("desc") or []
+                        if isinstance(desc, list):
+                            for p in desc[:3]:
+                                st.write(p)
+                        elif isinstance(desc, str):
+                            st.write(desc)
+                    langs = [l.get("name") for l in (bd.get("languages") or [])]
+                    tools = [t.get("name") for t in (bd.get("starting_proficiencies") or []) if (t.get("name") and not str(t.get("name")).lower().startswith("skill:"))]
+                    if langs:
+                        st.caption("Languages: " + ", ".join(langs))
+                    if tools:
+                        st.caption("Tool Proficiencies: " + ", ".join(tools))
         except Exception:
             pass
 
