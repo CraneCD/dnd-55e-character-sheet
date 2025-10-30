@@ -919,6 +919,31 @@ def main():
             st.session_state.combat["ac"] = computed_ac
         st.metric("Calculated AC", st.session_state.combat["ac"])
 
+        # Sorcery Points (only for Sorcerer)
+        try:
+            if st.session_state.get("class", "").lower() == "sorcerer":
+                st.markdown("#### Sorcery Points")
+                if "sorcery" not in st.session_state.combat:
+                    st.session_state.combat["sorcery"] = {"available": 0, "spent": 0}
+                sorc_level = int(st.session_state.get("level", 1))
+                default_available = sorc_level if sorc_level >= 2 else 0
+                c_sp1, c_sp2 = st.columns(2)
+                with c_sp1:
+                    st.session_state.combat["sorcery"]["available"] = st.number_input(
+                        "Points Available (by level)", min_value=0, max_value=20,
+                        value=int(st.session_state.combat["sorcery"].get("available", default_available)),
+                        help="Defaults to Sorcerer level (starts at level 2)"
+                    )
+                with c_sp2:
+                    st.session_state.combat["sorcery"]["spent"] = st.number_input(
+                        "Points Spent", min_value=0, max_value=20,
+                        value=int(st.session_state.combat["sorcery"].get("spent", 0))
+                    )
+                remaining = max(0, int(st.session_state.combat["sorcery"]["available"]) - int(st.session_state.combat["sorcery"]["spent"]))
+                st.metric("Sorcery Points Remaining", remaining)
+        except Exception:
+            pass
+
         st.markdown("#### Traits & Features")
         # Race traits
         try:
