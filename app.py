@@ -167,18 +167,26 @@ def ability_inputs() -> Dict[str, int]:
     cols = st.columns(6)
     scores: Dict[str, int] = {}
     defaults = {"Strength": 15, "Dexterity": 14, "Constitution": 13, "Intelligence": 12, "Wisdom": 10, "Charisma": 8}
+    current = st.session_state.get("scores", defaults)
+    # Ensure all abilities present
+    for k, v in defaults.items():
+        current.setdefault(k, v)
     for i, ability in enumerate(ABILITY_NAMES):
         with cols[i]:
-            scores[ability] = st.number_input(ability, min_value=1, max_value=30, value=defaults[ability], step=1)
+            scores[ability] = st.number_input(ability, min_value=1, max_value=30, value=int(current[ability]), step=1)
+    st.session_state["scores"] = scores
     return scores
 
 
 def skills_proficiency_inputs(default_proficiencies: Optional[List[str]] = None) -> Tuple[List[str], List[str]]:
     st.caption("Select proficient skills; toggle expertise where applicable.")
     all_skills = list(SKILLS.keys())
-    default_proficiencies = default_proficiencies or []
+    default_proficiencies = st.session_state.get("prof_skills", default_proficiencies or [])
     prof = st.multiselect("Proficient Skills", options=all_skills, default=default_proficiencies)
-    exp = st.multiselect("Expertise (double proficiency)", options=prof)
+    exp_defaults = st.session_state.get("expertise_skills", [])
+    exp = st.multiselect("Expertise (double proficiency)", options=prof, default=[e for e in exp_defaults if e in prof])
+    st.session_state["prof_skills"] = prof
+    st.session_state["expertise_skills"] = exp
     return prof, exp
 
 
@@ -239,7 +247,8 @@ def main():
 
     with st.sidebar:
         st.header("Character Info")
-        name = st.text_input("Name", value="Adventurer")
+        name = st.text_input("Name", value=st.session_state.get("name", "Adventurer"))
+        st.session_state["name"] = name
         alignment = st.selectbox(
             "Alignment",
             [
@@ -247,9 +256,15 @@ def main():
                 "Lawful Neutral", "True Neutral", "Chaotic Neutral",
                 "Lawful Evil", "Neutral Evil", "Chaotic Evil",
             ],
-            index=4,
+            index=[
+                "Lawful Good", "Neutral Good", "Chaotic Good",
+                "Lawful Neutral", "True Neutral", "Chaotic Neutral",
+                "Lawful Evil", "Neutral Evil", "Chaotic Evil",
+            ].index(st.session_state.get("alignment", "True Neutral")),
         )
-        level = st.number_input("Level", min_value=1, max_value=20, value=1)
+        st.session_state["alignment"] = alignment
+        level = st.number_input("Level", min_value=1, max_value=20, value=int(st.session_state.get("level", 1)))
+        st.session_state["level"] = int(level)
 
         st.subheader("Lineage & Class")
         with st.spinner("Loading options..."):
@@ -260,8 +275,21 @@ def main():
         class_labels = [c["name"] for c in classes]
         class_index_by_name = {c["name"]: c["index"] for c in classes}
 
-        race_name = st.selectbox("Race", options=race_labels) if races else st.text_input("Race")
-        class_name = st.selectbox("Class", options=class_labels) if classes else st.text_input("Class")
+        if races:
+            race_default = st.session_state.get("race")
+            race_idx = race_labels.index(race_default) if race_default in race_labels else 0
+            race_name = st.selectbox("Race", options=race_labels, index=race_idx)
+        else:
+            race_name = st.text_input("Race", value=st.session_state.get("race", ""))
+        st.session_state["race"] = race_name
+
+        if classes:
+            class_default = st.session_state.get("class")
+            class_idx = class_labels.index(class_default) if class_default in class_labels else 0
+            class_name = st.selectbox("Class", options=class_labels, index=class_idx)
+        else:
+            class_name = st.text_input("Class", value=st.session_state.get("class", ""))
+        st.session_state["class"] = class_name
         class_index = class_index_by_name.get(class_name)
 
         subclass_name = None
@@ -275,8 +303,11 @@ def main():
                 subclass_labels.append("Clockwork Sorcerer")
                 subclass_index_by_name["Clockwork Sorcerer"] = "clockwork-sorcerer-custom"
             if subclass_labels:
-                subclass_name = st.selectbox("Subclass", options=subclass_labels)
+                sc_default = st.session_state.get("subclass")
+                sc_idx = subclass_labels.index(sc_default) if sc_default in subclass_labels else 0
+                subclass_name = st.selectbox("Subclass", options=subclass_labels, index=sc_idx)
                 subclass_index = subclass_index_by_name.get(subclass_name)
+                st.session_state["subclass"] = subclass_name
 
     st.markdown("---")
 
@@ -290,7 +321,9 @@ def main():
         st.info(f"Proficiency Bonus: {format_mod(prof_bonus)}")
 
         default_save_profs = list(CLASS_SAVING_PROFICIENCIES.get(class_index or "", ("","")))
-        save_profs = st.multiselect("Saving Throw Proficiencies", options=ABILITY_NAMES, default=[s for s in default_save_profs if s])
+        save_defaults = st.session_state.get("save_profs", [s for s in default_save_profs if s])
+        save_profs = st.multiselect("Saving Throw Proficiencies", options=ABILITY_NAMES, default=save_defaults)
+        st.session_state["save_profs"] = save_profs
 
         st.subheader("Skills")
         prof_skills, expertise_skills = skills_proficiency_inputs()
@@ -385,22 +418,9 @@ def main():
                 st.session_state.spell_state["prepared"][lvl] = [idx_map[c] for c in chosen]
 
     st.markdown("---")
-    st.subheader("Summary")
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.write({
-            "name": name,
-            "alignment": alignment,
-            "level": int(level),
-            "race": race_name,
-            "class": class_name,
-            "subclass": subclass_name,
-            "scores": scores,
-            "proficiency_bonus": prof_bonus,
-            "initiative": initiative,
-        })
-    with col_b:
-        import json
+    import json
+    c1, c2 = st.columns([1, 1])
+    with c1:
         payload = json.dumps({
             "name": name,
             "alignment": alignment,
@@ -409,19 +429,43 @@ def main():
             "class": class_name,
             "subclass": subclass_name,
             "scores": scores,
-            "proficiency_bonus": prof_bonus,
-            "initiative": initiative,
-            "saves": save_values,
-            "skills": skill_values,
+            "proficiency_bonus": proficiency_bonus_for_level(int(level)),
+            "initiative": ability_modifier(scores["Dexterity"]),
+            "save_profs": st.session_state.get("save_profs", []),
+            "skills_proficiencies": st.session_state.get("prof_skills", []),
+            "skills_expertise": st.session_state.get("expertise_skills", []),
             "combat": st.session_state.get("combat", {}),
             "spells": st.session_state.get("spell_state", {}),
         }, ensure_ascii=False, indent=2)
         st.download_button(
-            label="Download Character JSON",
+            label="Save Character",
             data=payload.encode("utf-8"),
             file_name=f"{name.replace(' ', '_').lower()}_dnd55e.json",
             mime="application/json",
         )
+    with c2:
+        uploaded = st.file_uploader("Load Character JSON", type=["json"])
+        if uploaded:
+            try:
+                data = json.loads(uploaded.read())
+                st.session_state["name"] = data.get("name", st.session_state.get("name", "Adventurer"))
+                st.session_state["alignment"] = data.get("alignment", st.session_state.get("alignment", "True Neutral"))
+                st.session_state["level"] = int(data.get("level", st.session_state.get("level", 1)))
+                st.session_state["race"] = data.get("race", st.session_state.get("race", ""))
+                st.session_state["class"] = data.get("class", st.session_state.get("class", ""))
+                st.session_state["subclass"] = data.get("subclass", st.session_state.get("subclass", ""))
+                st.session_state["scores"] = data.get("scores", st.session_state.get("scores", {}))
+                st.session_state["save_profs"] = data.get("save_profs", st.session_state.get("save_profs", []))
+                st.session_state["prof_skills"] = data.get("skills_proficiencies", st.session_state.get("prof_skills", []))
+                st.session_state["expertise_skills"] = data.get("skills_expertise", st.session_state.get("expertise_skills", []))
+                if isinstance(data.get("combat"), dict):
+                    st.session_state["combat"] = data.get("combat")
+                if isinstance(data.get("spells"), dict):
+                    st.session_state["spell_state"] = data.get("spells")
+                st.success("Character loaded.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to load character: {e}")
 
 
 if __name__ == "__main__":
