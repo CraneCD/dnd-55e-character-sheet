@@ -192,6 +192,54 @@ SKILLS = {
 }
 
 
+# 5e armor rules reference (simplified)
+# base: base AC for the armor
+# dex: "full" for light, "cap2" for medium (max +2), "none" for heavy/unarmored variants that ignore Dex
+ARMOR_CATALOG = [
+    {"name": "None (Unarmored)", "type": "unarmored", "base": 10, "dex": "full"},
+    # Light
+    {"name": "Padded", "type": "light", "base": 11, "dex": "full"},
+    {"name": "Leather", "type": "light", "base": 11, "dex": "full"},
+    {"name": "Studded Leather", "type": "light", "base": 12, "dex": "full"},
+    # Medium
+    {"name": "Hide", "type": "medium", "base": 12, "dex": "cap2"},
+    {"name": "Chain Shirt", "type": "medium", "base": 13, "dex": "cap2"},
+    {"name": "Scale Mail", "type": "medium", "base": 14, "dex": "cap2"},
+    {"name": "Breastplate", "type": "medium", "base": 14, "dex": "cap2"},
+    {"name": "Half Plate", "type": "medium", "base": 15, "dex": "cap2"},
+    # Heavy
+    {"name": "Ring Mail", "type": "heavy", "base": 14, "dex": "none"},
+    {"name": "Chain Mail", "type": "heavy", "base": 16, "dex": "none"},
+    {"name": "Splint", "type": "heavy", "base": 17, "dex": "none"},
+    {"name": "Plate", "type": "heavy", "base": 18, "dex": "none"},
+]
+
+
+def compute_ac_from_armor(scores: Dict[str, int], armor_name: str, shield: bool, misc_bonus: int) -> int:
+    dex_mod = ability_modifier(scores.get("Dexterity", 10))
+    # Find armor
+    armor = next((a for a in ARMOR_CATALOG if a["name"] == armor_name), None)
+    if armor is None:
+        # Fallback: treat as unarmored
+        base = 10
+        dex_rule = "full"
+    else:
+        base = int(armor.get("base", 10))
+        dex_rule = armor.get("dex", "full")
+    # Dex contribution
+    if dex_rule == "full":
+        dex_contrib = dex_mod
+    elif dex_rule == "cap2":
+        dex_contrib = min(dex_mod, 2)
+    else:
+        dex_contrib = 0
+    ac = base + max(0, dex_contrib)
+    if shield:
+        ac += 2
+    ac += int(misc_bonus or 0)
+    return int(ac)
+
+
 CLASS_SAVING_PROFICIENCIES: Dict[str, Tuple[str, str]] = {
     # 5e defaults; 5.5e may vary slightly, but this is a solid baseline
     "barbarian": ("Strength", "Constitution"),
@@ -582,6 +630,37 @@ def main():
             st.session_state.combat["bonus_actions"] = st.text_area("Bonus Actions", value=st.session_state.combat["bonus_actions"], height=120)
         with a2:
             st.session_state.combat["equipment"] = st.text_area("Equipment", value=st.session_state.combat["equipment"], height=252)
+
+        st.markdown("#### Armor & Shields")
+        if "armor" not in st.session_state.combat:
+            st.session_state.combat["armor"] = {
+                "equipped": "None (Unarmored)",
+                "shield": False,
+                "misc_ac_bonus": 0,
+                "manual_override": False,
+            }
+        armor_names = [a["name"] for a in ARMOR_CATALOG]
+        c_armor, c_shield = st.columns([2, 1])
+        with c_armor:
+            st.session_state.combat["armor"]["equipped"] = st.selectbox("Equipped Armor", options=armor_names, index=armor_names.index(st.session_state.combat["armor"]["equipped"]) if st.session_state.combat["armor"].get("equipped") in armor_names else 0)
+        with c_shield:
+            st.session_state.combat["armor"]["shield"] = st.checkbox("Shield (+2 AC)", value=bool(st.session_state.combat["armor"].get("shield", False)))
+        c_misc, c_override = st.columns([1, 1])
+        with c_misc:
+            st.session_state.combat["armor"]["misc_ac_bonus"] = st.number_input("Misc AC Bonus", min_value=-10, max_value=10, value=int(st.session_state.combat["armor"].get("misc_ac_bonus", 0)))
+        with c_override:
+            st.session_state.combat["armor"]["manual_override"] = st.checkbox("Manual AC Override", value=bool(st.session_state.combat["armor"].get("manual_override", False)))
+
+        # Compute AC unless manually overridden
+        if not st.session_state.combat["armor"]["manual_override"]:
+            computed_ac = compute_ac_from_armor(
+                scores,
+                st.session_state.combat["armor"]["equipped"],
+                st.session_state.combat["armor"]["shield"],
+                st.session_state.combat["armor"]["misc_ac_bonus"],
+            )
+            st.session_state.combat["ac"] = computed_ac
+        st.metric("Calculated AC", st.session_state.combat["ac"])
 
         st.markdown("#### Traits & Features")
         # Race traits
