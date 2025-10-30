@@ -167,6 +167,14 @@ def save_character_store(store: Dict[str, Dict]) -> None:
 
 
 # -----------------------------
+# Expanded content (optional, user-provided)
+# -----------------------------
+def load_expanded_from_session() -> Dict:
+    expanded = st.session_state.get("expanded_content")
+    return expanded if isinstance(expanded, dict) else {}
+
+
+# -----------------------------
 # Rules helpers
 # -----------------------------
 ABILITY_NAMES = ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"]
@@ -286,18 +294,37 @@ def group_spells_by_level(class_index: Optional[str], subclass_index: Optional[s
         return {}
     class_spells = list_spells_for_class(class_index)
     subclass_spells = list_spells_for_subclass(subclass_index) if subclass_index else []
+    # Expanded spells from session
+    expanded = load_expanded_from_session()
+    extra_spells = []
+    for sp in expanded.get("spells", []) or []:
+        try:
+            classes = sp.get("classes", []) or []
+            subclasses = sp.get("subclasses", []) or []
+            if (class_index in classes) or (subclass_index and subclass_index in subclasses):
+                extra_spells.append({"name": sp.get("name"), "index": sp.get("index") or sp.get("name","unknown").lower().replace(" ", "-") + "-homebrew", "url": sp.get("url")})
+        except Exception:
+            continue
     merged: Dict[str, Dict] = {}
-    for s in class_spells + subclass_spells:
+    for s in class_spells + subclass_spells + extra_spells:
         if s and isinstance(s, dict) and s.get("index"):
             merged[s["index"]] = s
     by_level: Dict[int, List[Dict]] = {i: [] for i in range(0, 10)}
     for idx, s in merged.items():
         try:
-            detail = get_spell_detail(idx)
-            lvl = int(detail.get("level", 0))
+            detail = None
+            lvl = None
+            # If expanded provided direct level, use it; else fetch
+            if expanded.get("spells"):
+                match = next((x for x in expanded["spells"] if (x.get("index") or x.get("name","unknown").lower().replace(" ", "-") + "-homebrew") == idx), None)
+                if match and "level" in match:
+                    lvl = int(match["level"])
+            if lvl is None:
+                detail = get_spell_detail(idx)
+                lvl = int(detail.get("level", 0))
             by_level.setdefault(lvl, []).append({
                 "index": idx,
-                "name": detail.get("name", s.get("name")),
+                "name": (detail.get("name") if detail else s.get("name")),
                 "level": lvl,
             })
         except Exception:
@@ -541,6 +568,15 @@ def main():
             if class_name.lower() == "sorcerer" and "Clockwork Sorcerer" not in subclass_labels:
                 subclass_labels.append("Clockwork Sorcerer")
                 subclass_index_by_name["Clockwork Sorcerer"] = "clockwork-sorcerer-custom"
+            # Merge expanded subclasses if provided
+            expanded = load_expanded_from_session()
+            for sc in expanded.get("subclasses", []) or []:
+                if sc.get("class_index") == class_index:
+                    nm = sc.get("name")
+                    idx = sc.get("index") or nm.lower().replace(" ", "-") + "-homebrew"
+                    if nm and nm not in subclass_labels:
+                        subclass_labels.append(nm)
+                        subclass_index_by_name[nm] = idx
             if subclass_labels:
                 sc_default = st.session_state.get("subclass")
                 sc_idx = subclass_labels.index(sc_default) if sc_default in subclass_labels else 0
@@ -549,6 +585,16 @@ def main():
                 st.session_state["subclass"] = subclass_name
         else:
             race_index = None
+
+        st.subheader("Expanded Content (optional)")
+        st.caption("Upload a JSON to include content from expansions/homebrew. Schema: {subclasses:[{class_index,name,index}], spells:[{name,index,level,classes:[class_index],subclasses:[subclass_index]}], traits:[{race_index,name,desc}], subclass_features:[{subclass_index,name,level,desc}]}.")
+        upload_expanded = st.file_uploader("Expanded Content JSON", type=["json"], key="expanded_upload")
+        if upload_expanded is not None:
+            try:
+                st.session_state["expanded_content"] = json.loads(upload_expanded.read())
+                st.success("Expanded content loaded")
+            except Exception as e:
+                st.error(f"Failed to parse expanded content: {e}")
 
     st.markdown("---")
 
@@ -682,6 +728,17 @@ def main():
                                     st.write(desc)
                             except Exception:
                                 st.write(t.get("name"))
+                        # Expanded traits for race
+                        expanded = load_expanded_from_session()
+                        for tr in expanded.get("traits", []) or []:
+                            if tr.get("race_index") == race_index:
+                                st.markdown(f"**{tr.get('name','')}**")
+                                d = tr.get("desc")
+                                if isinstance(d, list):
+                                    for p in d[:3]:
+                                        st.write(p)
+                                elif isinstance(d, str):
+                                    st.write(d)
         except Exception:
             pass
 
@@ -713,6 +770,21 @@ def main():
             elif subclass_name == "Clockwork Sorcerer":
                 with st.expander("Subclass Features — Clockwork Sorcerer"):
                     st.write("Restoring Balance, Bastion of Law, Trance of Order, Clockwork Cavalcade (placeholder)")
+            # Expanded subclass features
+            expanded = load_expanded_from_session()
+            exp_sfeats = [f for f in expanded.get("subclass_features", []) or [] if f.get("subclass_index") == subclass_index]
+            if exp_sfeats:
+                visible = [
+                    {"name": f.get("name"), "level": int(f.get("level", 0)), "desc": f.get("desc", "")}
+                    for f in exp_sfeats if int(f.get("level", 0)) <= int(level)
+                ]
+                visible = sorted(visible, key=lambda x: (x["level"], x["name"]))
+                if visible:
+                    with st.expander(f"Subclass Features — {subclass_name} (Expanded)"):
+                        for f in visible:
+                            st.write(f"Level {f['level']}: {f['name']}")
+                            if f.get("desc"):
+                                st.caption(f["desc"])
         except Exception:
             pass
 
