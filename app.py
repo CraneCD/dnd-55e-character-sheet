@@ -386,6 +386,7 @@ DEFAULT_EXPANDED = {
     ],
     "traits": [],
     "subclass_features": [],
+    "class_features": [],  # {class_index,name,level,desc}
     "backgrounds": [  # {name,index,feature:{name,desc},skills:[...],tools:[...],languages:[...],equipment:[...],origin_feat:{name,desc}}
         {"name": "Acolyte", "index": "acolyte", "feature": {"name": "Faithful Service", "desc": "You serve a temple and gain shelter, healing, and community support from those of your faith."}, "skills": ["Insight", "Religion"], "tools": ["None"], "languages": ["Celestial"], "equipment": ["Holy symbol", "Prayer book", "Common clothes", "Pouch (10 gp)"], "origin_feat": {"name": "Magic Initiate (Divine)", "desc": "You learn 2 divine cantrips and 1 divine 1st-level spell (once per long rest). Wisdom is your spellcasting ability for these spells."}},
         {"name": "Artisan", "index": "artisan", "feature": {"name": "Guild Membership", "desc": "You belong to a trade guild that provides connections, lodging, and legal support in return for dues."}, "skills": ["Persuasion", "Investigation"], "tools": ["Artisan’s Tools (choose one)"], "languages": ["Dwarvish"], "equipment": ["Artisan’s tools (your choice)", "Traveler’s clothes", "Guild letter of introduction", "Pouch (15 gp)"], "origin_feat": {"name": "Crafter", "desc": "You gain a discount on nonmagical items, proficiency with artisan’s tools of your choice, and faster crafting."}},
@@ -410,7 +411,7 @@ def load_expanded_from_session() -> Dict:
     expanded = st.session_state.get("expanded_content")
     merged = {k: list(v) for k, v in DEFAULT_EXPANDED.items()}
     if isinstance(expanded, dict):
-        for key in ("subclasses", "spells", "traits", "subclass_features", "backgrounds"):
+        for key in ("subclasses", "spells", "traits", "subclass_features", "class_features", "backgrounds"):
             if isinstance(expanded.get(key), list):
                 merged[key].extend(expanded[key])
     return merged
@@ -823,8 +824,8 @@ def main():
         subclass_index: Optional[str] = None
         if class_index:
             subclasses = list_subclasses_for_class(class_index)
-            subclass_labels = [s["name"] for s in subclasses]
-            subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
+                subclass_labels = [s["name"] for s in subclasses]
+                subclass_index_by_name = {s["name"]: s["index"] for s in subclasses}
             # Add custom option for Clockwork Sorcerer
             if class_name.lower() == "sorcerer" and "Clockwork Sorcerer" not in subclass_labels:
                 subclass_labels.append("Clockwork Sorcerer")
@@ -877,18 +878,18 @@ def main():
     tab_abilities, tab_combat, tab_spells, tab_expanded = st.tabs(["Abilities & Skills", "Combat", "Spells", "Expanded Content"])
 
     with tab_abilities:
-        st.subheader("Ability Scores")
-        scores = ability_inputs()
+    st.subheader("Ability Scores")
+    scores = ability_inputs()
 
-        prof_bonus = proficiency_bonus_for_level(int(level))
-        st.info(f"Proficiency Bonus: {format_mod(prof_bonus)}")
+    prof_bonus = proficiency_bonus_for_level(int(level))
+    st.info(f"Proficiency Bonus: {format_mod(prof_bonus)}")
 
-        default_save_profs = list(CLASS_SAVING_PROFICIENCIES.get(class_index or "", ("","")))
+    default_save_profs = list(CLASS_SAVING_PROFICIENCIES.get(class_index or "", ("","")))
         save_defaults = st.session_state.get("save_profs", [s for s in default_save_profs if s])
         save_profs = st.multiselect("Saving Throw Proficiencies", options=ABILITY_NAMES, default=save_defaults)
         st.session_state["save_profs"] = save_profs
 
-        st.subheader("Skills")
+    st.subheader("Skills")
         auto_granted = auto_granted_skill_proficiencies(race_index, class_index, subclass_index, background_index, expanded_background)
         if auto_granted:
             st.caption("Auto-granted by ancestry/class/subclass/background: " + ", ".join(auto_granted))
@@ -897,9 +898,9 @@ def main():
         st.session_state["prof_skills"] = current_prof
         prof_skills, expertise_skills = skills_proficiency_inputs(default_proficiencies=current_prof)
 
-        skill_values = compute_skill_values(scores, prof_bonus, prof_skills, expertise_skills)
-        save_values = compute_saves(scores, prof_bonus, save_profs)
-        initiative = ability_modifier(scores["Dexterity"])  # + misc can be added later
+    skill_values = compute_skill_values(scores, prof_bonus, prof_skills, expertise_skills)
+    save_values = compute_saves(scores, prof_bonus, save_profs)
+    initiative = ability_modifier(scores["Dexterity"])  # + misc can be added later
 
         st.markdown("#### Saving Throws")
         save_cols = st.columns(3)
@@ -1082,11 +1083,20 @@ def main():
         except Exception:
             pass
 
-        # Class features (filtered by level)
+        # Class features (filtered by level) — prefer expanded override if provided
         try:
             if class_index:
-                feats = list_class_features(class_index)
-                visible = filter_features_up_to_level(feats, int(level))
+                expanded_all = load_expanded_from_session()
+                expanded_cls = [f for f in expanded_all.get("class_features", []) if f.get("class_index") == class_index]
+                if expanded_cls:
+                    visible = [
+                        {"name": f.get("name"), "level": int(f.get("level", 0)), "desc": f.get("desc", "")}
+                        for f in expanded_cls if int(f.get("level", 0)) <= int(level)
+                    ]
+                    visible = sorted(visible, key=lambda x: (x["level"], x["name"]))
+                else:
+                    feats = list_class_features(class_index)
+                    visible = filter_features_up_to_level(feats, int(level))
                 if visible:
                     with st.expander(f"Class Features — {class_name}"):
                         for f in visible:
@@ -1197,7 +1207,7 @@ def main():
         ])
         st.session_state.spell_state["prepared"][0] = [cantrip_map[lbl] for lbl in selected_cantrips if lbl]
 
-        st.markdown("---")
+    st.markdown("---")
         for lvl in range(1, 10):
             spells_lvl = grouped.get(lvl, [])
             with st.expander(f"Level {lvl} — {len(spells_lvl)} spells"):
@@ -1221,7 +1231,7 @@ def main():
 
     with tab_expanded:
         st.subheader("Expanded Content (optional)")
-        st.caption("Upload JSON to add subclasses, spells, traits and features from expansions/homebrew. Schema: {subclasses:[{class_index,name,index}], spells:[{name,index,level,classes:[class_index],subclasses:[subclass_index]}], traits:[{race_index,name,desc}], subclass_features:[{subclass_index,name,level,desc}]}.")
+        st.caption("Upload JSON to add subclasses, spells, traits and features from expansions/homebrew. Schema: {subclasses:[{class_index,name,index}], spells:[{name,index,level,classes:[class_index],subclasses:[subclass_index]}], traits:[{race_index,name,desc}], class_features:[{class_index,name,level,desc}], subclass_features:[{subclass_index,name,level,desc}], backgrounds:[{name,index,feature:{name,desc},skills:[...],tools:[...],languages:[...],equipment:[...],origin_feat:{name,desc}}]}.")
         upload_expanded = st.file_uploader("Expanded Content JSON", type=["json"], key="expanded_upload_tab")
         if upload_expanded is not None:
             try:
