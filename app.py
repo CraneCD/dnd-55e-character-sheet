@@ -821,15 +821,7 @@ def main():
         else:
             race_index = None
 
-        st.subheader("Expanded Content (optional)")
-        st.caption("Upload a JSON to include content from expansions/homebrew. Schema: {subclasses:[{class_index,name,index}], spells:[{name,index,level,classes:[class_index],subclasses:[subclass_index]}], traits:[{race_index,name,desc}], subclass_features:[{subclass_index,name,level,desc}]}.")
-        upload_expanded = st.file_uploader("Expanded Content JSON", type=["json"], key="expanded_upload")
-        if upload_expanded is not None:
-            try:
-                st.session_state["expanded_content"] = json.loads(upload_expanded.read())
-                st.success("Expanded content loaded")
-            except Exception as e:
-                st.error(f"Failed to parse expanded content: {e}")
+        # Expanded Content uploader moved to its own tab (removed from sidebar)
 
         # Background selection
         st.subheader("Background")
@@ -846,7 +838,7 @@ def main():
 
     st.markdown("---")
 
-    tab_abilities, tab_combat, tab_spells = st.tabs(["Abilities & Skills", "Combat", "Spells"])
+    tab_abilities, tab_combat, tab_spells, tab_expanded = st.tabs(["Abilities & Skills", "Combat", "Spells", "Expanded Content"])
 
     with tab_abilities:
         st.subheader("Ability Scores")
@@ -1123,6 +1115,25 @@ def main():
                 current_defaults = [next((k for k in labels if k.endswith(f"({i})")), None) for i in prepared_lvl]
                 chosen = st.multiselect(f"Prepared Spells (Level {lvl})", options=labels, default=[d for d in current_defaults if d is not None], key=f"prepared_{lvl}")
                 st.session_state.spell_state["prepared"][lvl] = [idx_map[c] for c in chosen]
+
+    with tab_expanded:
+        st.subheader("Expanded Content (optional)")
+        st.caption("Upload JSON to add subclasses, spells, traits and features from expansions/homebrew. Schema: {subclasses:[{class_index,name,index}], spells:[{name,index,level,classes:[class_index],subclasses:[subclass_index]}], traits:[{race_index,name,desc}], subclass_features:[{subclass_index,name,level,desc}]}.")
+        upload_expanded = st.file_uploader("Expanded Content JSON", type=["json"], key="expanded_upload_tab")
+        if upload_expanded is not None:
+            try:
+                st.session_state["expanded_content"] = json.loads(upload_expanded.read())
+                st.success("Expanded content loaded")
+            except Exception as e:
+                st.error(f"Failed to parse expanded content: {e}")
+        # Show current merged counts
+        merged_now = load_expanded_from_session()
+        st.write({
+            "subclasses": len(merged_now.get("subclasses", [])),
+            "spells": len(merged_now.get("spells", [])),
+            "traits": len(merged_now.get("traits", [])),
+            "subclass_features": len(merged_now.get("subclass_features", [])),
+        })
 
     st.markdown("---")
     c1, c2, c3 = st.columns([1, 1, 1])
