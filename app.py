@@ -106,6 +106,30 @@ def list_subclass_features(subclass_index: str) -> List[Dict]:
         return []
 
 
+@st.cache_data(show_spinner=False)
+def get_feature_detail(feature_index: str) -> Dict:
+    return api_get(f"features/{feature_index}")
+
+
+def filter_features_up_to_level(features: List[Dict], max_level: int) -> List[Dict]:
+    eligible: List[Dict] = []
+    for f in features:
+        try:
+            idx = f.get("index")
+            if not idx:
+                continue
+            detail = get_feature_detail(idx)
+            lvl = int(detail.get("level", 0))
+            if lvl <= max_level:
+                eligible.append({
+                    "name": detail.get("name", f.get("name")),
+                    "level": lvl,
+                })
+        except Exception:
+            continue
+    return sorted(eligible, key=lambda x: (x["level"], x["name"]))
+
+
 # -----------------------------
 # Local store for named characters
 # -----------------------------
@@ -571,25 +595,27 @@ def main():
         except Exception:
             pass
 
-        # Class features (summary list)
+        # Class features (filtered by level)
         try:
             if class_index:
                 feats = list_class_features(class_index)
-                if feats:
+                visible = filter_features_up_to_level(feats, int(level))
+                if visible:
                     with st.expander(f"Class Features — {class_name}"):
-                        for f in feats[:30]:
-                            st.write(f.get("name"))
+                        for f in visible:
+                            st.write(f"Level {f['level']}: {f['name']}")
         except Exception:
             pass
 
-        # Subclass features (summary list)
+        # Subclass features (filtered by level)
         try:
             if subclass_index and not str(subclass_index).endswith("-custom"):
                 sfeats = list_subclass_features(subclass_index)
-                if sfeats:
+                visible = filter_features_up_to_level(sfeats, int(level))
+                if visible:
                     with st.expander(f"Subclass Features — {subclass_name}"):
-                        for f in sfeats[:30]:
-                            st.write(f.get("name"))
+                        for f in visible:
+                            st.write(f"Level {f['level']}: {f['name']}")
             elif subclass_name == "Clockwork Sorcerer":
                 with st.expander("Subclass Features — Clockwork Sorcerer"):
                     st.write("Restoring Balance, Bastion of Law, Trance of Order, Clockwork Cavalcade (placeholder)")
