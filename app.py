@@ -154,6 +154,74 @@ def filter_features_up_to_level(features: List[Dict], max_level: int) -> List[Di
     return sorted(eligible, key=lambda x: (x["level"], x["name"]))
 
 
+# Curated Sorcerer (2024 PHB) class features
+def get_sorcerer_2024_features() -> List[Dict]:
+    return [
+        {
+            "level": 1,
+            "name": "Innate Sorcery",
+            "desc": (
+                "As a Bonus Action, unleash simmering magic for 1 minute: "
+                "+1 to your Sorcerer spell save DC; Advantage on attack rolls of Sorcerer spells you cast; "
+                "uses: 2 per Long Rest."
+            ),
+        },
+        {
+            "level": 2,
+            "name": "Font of Magic",
+            "desc": (
+                "Gain Sorcery Points (2 at 2nd level; increases by level). Convert spell slots to points equal to the slot’s level; "
+                "as a Bonus Action, create spell slots up to 5th using points (1:2, 2:3, 3:5, 4:6, 5:7). Slots created vanish on a Long Rest."
+            ),
+        },
+        {
+            "level": 2,
+            "name": "Metamagic",
+            "desc": (
+                "Choose two Metamagic options to modify your spells by spending Sorcery Points. One option per spell unless noted. "
+                "Replace one option on level up; gain two more options at levels 10 and 17."
+            ),
+        },
+        {
+            "level": 4,
+            "name": "Ability Score Improvement",
+            "desc": (
+                "Gain a feat (ASI or other). You gain this feature again at levels 8, 12, and 16."
+            ),
+        },
+        {
+            "level": 5,
+            "name": "Sorcerous Restoration",
+            "desc": (
+                "After a Short Rest, regain expended Sorcery Points up to half your Sorcerer level (round down). "
+                "Once used, refresh on a Long Rest."
+            ),
+        },
+        {
+            "level": 7,
+            "name": "Sorcery Incarnate",
+            "desc": (
+                "If you have no uses of Innate Sorcery, you can activate it by spending 2 Sorcery Points. "
+                "While Innate Sorcery is active, you can apply up to two Metamagic options to each spell you cast."
+            ),
+        },
+        {
+            "level": 19,
+            "name": "Epic Boon",
+            "desc": (
+                "Gain an Epic Boon feat (or another eligible feat). Recommended: Boon of Dimensional Travel."
+            ),
+        },
+        {
+            "level": 20,
+            "name": "Arcane Apotheosis",
+            "desc": (
+                "While Innate Sorcery is active, you can use one Metamagic option on each of your turns without spending Sorcery Points."
+            ),
+        },
+    ]
+
+
 # -----------------------------
 # Local store for named characters
 # -----------------------------
@@ -1085,8 +1153,13 @@ def main():
         # Class features (filtered by level)
         try:
             if class_index:
-                feats = list_class_features(class_index)
-                visible = filter_features_up_to_level(feats, int(level))
+                # Use curated Sorcerer 2024 features for Sorcerer; otherwise use API
+                if class_index == "sorcerer":
+                    feats_curated = get_sorcerer_2024_features()
+                    visible = [f for f in feats_curated if int(f.get("level", 0)) <= int(level)]
+                else:
+                    feats = list_class_features(class_index)
+                    visible = filter_features_up_to_level(feats, int(level))
                 if visible:
                     with st.expander(f"Class Features — {class_name}"):
                         for f in visible:
