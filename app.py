@@ -278,6 +278,42 @@ def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Opt
     return out
 
 
+def normalize_spell_state(spell_state: Optional[Dict]) -> Dict:
+    normalized = {
+        "slots": {lvl: 0 for lvl in range(1, 10)},
+        "slots_used": {lvl: 0 for lvl in range(1, 10)},
+        "prepared": {lvl: [] for lvl in range(0, 10)},
+    }
+    if not isinstance(spell_state, dict):
+        return normalized
+    # Normalize slots
+    for key in ("slots", "slots_used"):
+        val = spell_state.get(key, {})
+        if isinstance(val, dict):
+            for k, v in val.items():
+                try:
+                    lvl = int(k)
+                except Exception:
+                    continue
+                if 1 <= lvl <= 9:
+                    try:
+                        normalized[key][lvl] = int(v)
+                    except Exception:
+                        pass
+    # Normalize prepared
+    prep = spell_state.get("prepared", {})
+    if isinstance(prep, dict):
+        for k, v in prep.items():
+            try:
+                lvl = int(k)
+            except Exception:
+                continue
+            if 0 <= lvl <= 9:
+                if isinstance(v, list):
+                    normalized["prepared"][lvl] = [str(i) for i in v]
+    return normalized
+
+
 # -----------------------------
 # UI helpers
 # -----------------------------
@@ -563,18 +599,16 @@ def main():
     with tab_spells:
         st.subheader("Spells")
         grouped = group_spells_by_level(class_index, subclass_index)
-        if "spell_state" not in st.session_state:
-            st.session_state.spell_state = {
-                "slots": {lvl: 0 for lvl in range(1, 10)},
-                "slots_used": {lvl: 0 for lvl in range(1, 10)},
-                "prepared": {lvl: [] for lvl in range(0, 10)},
-            }
+        st.session_state.spell_state = normalize_spell_state(st.session_state.get("spell_state"))
         # Level 0 (cantrips)
         cantrips = grouped.get(0, [])
         cantrip_labels = [f"{s['name']} ({s['index']})" for s in cantrips]
         cantrip_map = {f"{s['name']} ({s['index']})": s['index'] for s in cantrips}
+        prepared0 = st.session_state.spell_state.get("prepared", {}).get(0, [])
+        if not isinstance(prepared0, list):
+            prepared0 = []
         selected_cantrips = st.multiselect("Cantrips", options=cantrip_labels, default=[
-            next((k for k in cantrip_labels if k.endswith(f"({i})")), None) for i in st.session_state.spell_state["prepared"][0]
+            next((k for k in cantrip_labels if k.endswith(f"({i})")), None) for i in prepared0
         ])
         st.session_state.spell_state["prepared"][0] = [cantrip_map[lbl] for lbl in selected_cantrips if lbl]
 
@@ -584,12 +618,19 @@ def main():
             with st.expander(f"Level {lvl} — {len(spells_lvl)} spells"):
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.session_state.spell_state["slots"][lvl] = st.number_input(f"Level {lvl} Spell Slots", min_value=0, max_value=9, value=int(st.session_state.spell_state["slots"][lvl]), key=f"slots_{lvl}")
+                    st.session_state.spell_state["slots"][lvl] = st.number_input(
+                        f"Level {lvl} Spell Slots", min_value=0, max_value=9,
+                        value=int(st.session_state.spell_state.get("slots", {}).get(lvl, 0)), key=f"slots_{lvl}")
                 with c2:
-                    st.session_state.spell_state["slots_used"][lvl] = st.number_input(f"Slots Expended (L{lvl})", min_value=0, max_value=9, value=int(st.session_state.spell_state["slots_used"][lvl]), key=f"slots_used_{lvl}")
+                    st.session_state.spell_state["slots_used"][lvl] = st.number_input(
+                        f"Slots Expended (L{lvl})", min_value=0, max_value=9,
+                        value=int(st.session_state.spell_state.get("slots_used", {}).get(lvl, 0)), key=f"slots_used_{lvl}")
                 labels = [f"{s['name']} ({s['index']})" for s in spells_lvl]
                 idx_map = {f"{s['name']} ({s['index']})": s['index'] for s in spells_lvl}
-                current_defaults = [next((k for k in labels if k.endswith(f"({i})")), None) for i in st.session_state.spell_state["prepared"][lvl]]
+                prepared_lvl = st.session_state.spell_state.get("prepared", {}).get(lvl, [])
+                if not isinstance(prepared_lvl, list):
+                    prepared_lvl = []
+                current_defaults = [next((k for k in labels if k.endswith(f"({i})")), None) for i in prepared_lvl]
                 chosen = st.multiselect(f"Prepared Spells (Level {lvl})", options=labels, default=[d for d in current_defaults if d is not None], key=f"prepared_{lvl}")
                 st.session_state.spell_state["prepared"][lvl] = [idx_map[c] for c in chosen]
 
@@ -636,7 +677,7 @@ def main():
                 if isinstance(data.get("combat"), dict):
                     st.session_state["combat"] = data.get("combat")
                 if isinstance(data.get("spells"), dict):
-                    st.session_state["spell_state"] = data.get("spells")
+                    st.session_state["spell_state"] = normalize_spell_state(data.get("spells"))
                 st.success("Character loaded.")
                 st.rerun()
             except Exception as e:
@@ -671,7 +712,7 @@ def main():
                 if isinstance(data.get("combat"), dict):
                     st.session_state["combat"] = data.get("combat")
                 if isinstance(data.get("spells"), dict):
-                    st.session_state["spell_state"] = data.get("spells")
+                    st.session_state["spell_state"] = normalize_spell_state(data.get("spells"))
                 st.success(f"Loaded '{chosen_name}'")
                 st.rerun()
             except Exception as e:
