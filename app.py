@@ -169,9 +169,34 @@ def save_character_store(store: Dict[str, Dict]) -> None:
 # -----------------------------
 # Expanded content (optional, user-provided)
 # -----------------------------
+DEFAULT_EXPANDED = {
+    "subclasses": [
+        {"class_index": "sorcerer", "name": "Clockwork Soul", "index": "clockwork-soul"}
+    ],
+    "spells": [
+        {"name": "Alarm", "index": "alarm", "level": 1, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Protection from Evil and Good", "index": "protection-from-evil-and-good", "level": 1, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Aid", "index": "aid", "level": 2, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Lesser Restoration", "index": "lesser-restoration", "level": 2, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Dispel Magic", "index": "dispel-magic", "level": 3, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Protection from Energy", "index": "protection-from-energy", "level": 3, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Freedom of Movement", "index": "freedom-of-movement", "level": 4, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Summon Construct", "index": "summon-construct", "level": 4, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Greater Restoration", "index": "greater-restoration", "level": 5, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]},
+        {"name": "Wall of Force", "index": "wall-of-force", "level": 5, "classes": ["sorcerer"], "subclasses": ["clockwork-soul"]}
+    ],
+    "traits": [],
+    "subclass_features": []
+}
+
 def load_expanded_from_session() -> Dict:
     expanded = st.session_state.get("expanded_content")
-    return expanded if isinstance(expanded, dict) else {}
+    merged = {k: list(v) for k, v in DEFAULT_EXPANDED.items()}
+    if isinstance(expanded, dict):
+        for key in ("subclasses", "spells", "traits", "subclass_features"):
+            if isinstance(expanded.get(key), list):
+                merged[key].extend(expanded[key])
+    return merged
 
 
 # -----------------------------
