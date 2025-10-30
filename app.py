@@ -385,14 +385,15 @@ DEFAULT_EXPANDED = {
         {"name": "Wish", "index": "wish", "level": 9, "classes": ["sorcerer"], "subclasses": []}
     ],
     "traits": [],
-    "subclass_features": []
+    "subclass_features": [],
+    "backgrounds": []  # {name,index,feature:{name,desc},skills:[Skill names],tools:[...],languages:[...]}
 }
 
 def load_expanded_from_session() -> Dict:
     expanded = st.session_state.get("expanded_content")
     merged = {k: list(v) for k, v in DEFAULT_EXPANDED.items()}
     if isinstance(expanded, dict):
-        for key in ("subclasses", "spells", "traits", "subclass_features"):
+        for key in ("subclasses", "spells", "traits", "subclass_features", "backgrounds"):
             if isinstance(expanded.get(key), list):
                 merged[key].extend(expanded[key])
     return merged
@@ -568,7 +569,7 @@ def extract_skill_name(prof_name: str) -> Optional[str]:
 
 
 @st.cache_data(show_spinner=False)
-def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Optional[str], subclass_index: Optional[str], background_index: Optional[str]) -> List[str]:
+def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Optional[str], subclass_index: Optional[str], background_index: Optional[str], expanded_background: Optional[Dict] = None) -> List[str]:
     granted: List[str] = []
     # Race fixed proficiencies
     try:
@@ -597,6 +598,14 @@ def auto_granted_skill_proficiencies(race_index: Optional[str], class_index: Opt
             for p in bd.get("starting_proficiencies", []) or []:
                 s = extract_skill_name(p.get("name"))
                 if s:
+                    granted.append(s)
+    except Exception:
+        pass
+    # Expanded background skills
+    try:
+        if expanded_background and isinstance(expanded_background.get("skills"), list):
+            for s in expanded_background.get("skills"):
+                if s in SKILLS.keys():
                     granted.append(s)
     except Exception:
         pass
@@ -823,10 +832,18 @@ def main():
 
         # Expanded Content uploader moved to its own tab (removed from sidebar)
 
-        # Background selection
+        # Background selection (API + Expanded)
         st.subheader("Background")
         bg_labels = [b["name"] for b in backgrounds]
         bg_index_by_name = {b["name"]: b["index"] for b in backgrounds}
+        expanded_all = load_expanded_from_session()
+        expanded_bgs = expanded_all.get("backgrounds", [])
+        for eb in expanded_bgs:
+            nm = eb.get("name")
+            idx = eb.get("index") or nm.lower().replace(" ", "-") + "-homebrew"
+            if nm and nm not in bg_labels:
+                bg_labels.append(nm)
+                bg_index_by_name[nm] = idx
         if bg_labels:
             bg_default = st.session_state.get("background")
             bg_idx = bg_labels.index(bg_default) if bg_default in bg_labels else 0
@@ -835,6 +852,7 @@ def main():
             background_name = st.text_input("Background", value=st.session_state.get("background", ""))
         st.session_state["background"] = background_name
         background_index = bg_index_by_name.get(background_name)
+        expanded_background = next((eb for eb in expanded_bgs if eb.get("name") == background_name), None) if background_index is None else None
 
     st.markdown("---")
 
@@ -853,9 +871,9 @@ def main():
         st.session_state["save_profs"] = save_profs
 
         st.subheader("Skills")
-        auto_granted = auto_granted_skill_proficiencies(race_index, class_index, subclass_index, background_index)
+        auto_granted = auto_granted_skill_proficiencies(race_index, class_index, subclass_index, background_index, expanded_background)
         if auto_granted:
-            st.caption("Auto-granted by ancestry/class/subclass: " + ", ".join(auto_granted))
+            st.caption("Auto-granted by ancestry/class/subclass/background: " + ", ".join(auto_granted))
         # Merge auto-granted with saved/current selection
         current_prof = sorted(set((st.session_state.get("prof_skills") or [])) | set(auto_granted))
         st.session_state["prof_skills"] = current_prof
@@ -1055,9 +1073,9 @@ def main():
 
         # Background feature and bonuses
         try:
-            if 'background_index' in locals() and background_index:
-                bd = get_background_detail(background_index)
-                with st.expander(f"Background — {background_name}"):
+            with st.expander(f"Background — {background_name}"):
+                if 'background_index' in locals() and background_index:
+                    bd = get_background_detail(background_index)
                     feat = bd.get("feature") or {}
                     if feat:
                         st.write(f"Feature: {feat.get('name','')}")
@@ -1067,9 +1085,24 @@ def main():
                                 st.write(p)
                         elif isinstance(desc, str):
                             st.write(desc)
-                    # List bonuses
                     langs = [l.get("name") for l in (bd.get("languages") or [])]
                     tools = [t.get("name") for t in (bd.get("starting_proficiencies") or []) if (t.get("name") and not str(t.get("name")).lower().startswith("skill:"))]
+                    if langs:
+                        st.caption("Languages: " + ", ".join(langs))
+                    if tools:
+                        st.caption("Tool Proficiencies: " + ", ".join(tools))
+                elif 'expanded_background' in locals() and expanded_background:
+                    feat = expanded_background.get("feature") or {}
+                    if feat:
+                        st.write(f"Feature: {feat.get('name','')}")
+                        d = feat.get("desc")
+                        if isinstance(d, list):
+                            for p in d[:3]:
+                                st.write(p)
+                        elif isinstance(d, str):
+                            st.write(d)
+                    langs = expanded_background.get("languages") or []
+                    tools = expanded_background.get("tools") or []
                     if langs:
                         st.caption("Languages: " + ", ".join(langs))
                     if tools:
