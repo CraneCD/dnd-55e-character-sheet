@@ -230,22 +230,17 @@ def _store_path() -> str:
 
 
 def load_character_store() -> Dict[str, Dict]:
-    try:
-        with open(_store_path(), "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                return data
-    except Exception:
-        pass
-    return {}
+    # Use Streamlit session_state for persistence across deployments/sessions
+    if "saved_characters" not in st.session_state:
+        st.session_state.saved_characters = {}
+    return st.session_state.saved_characters
 
 
 def save_character_store(store: Dict[str, Dict]) -> None:
-    try:
-        with open(_store_path(), "w", encoding="utf-8") as f:
-            json.dump(store, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    # Persist to Streamlit session_state
+    if "saved_characters" not in st.session_state:
+        st.session_state.saved_characters = {}
+    st.session_state.saved_characters = store
 
 
 # -----------------------------
